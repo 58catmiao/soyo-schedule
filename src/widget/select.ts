@@ -8,10 +8,8 @@ import { AppData, Course, WEEKDAY_LABELS, Weekday } from '../types';
 import {
   UpcomingSession,
   addDays,
-  atTime,
-  coursesOnDay,
   midnightOf,
-  periodSlot,
+  sessionsOnDate as daySessions,
   upcomingSessions,
   weekOfDate,
   weekdayOf,
@@ -47,32 +45,20 @@ export type TodaySelection = {
 
 const RELATIVE_LABELS = ['今天', '明天', '后天'];
 
-/** 某一天要上的课，带上作息表里的起止时间；传了 now 就丢掉已经上完的 */
+/** 某一天要上的课；传了 now 就丢掉已经上完的 */
 export function sessionsOnDate(
   courses: Course[],
   semester: AppData['semester'],
   date: Date,
   now?: Date
 ): PreviewItem[] {
-  const week = weekOfDate(date, semester);
-  if (week < 1 || week > semester.totalWeeks) return [];
-
-  const list = coursesOnDay(courses, week, weekdayOf(date));
-  const out: PreviewItem[] = [];
-  for (const course of list) {
-    const start = periodSlot(semester.periods, course.periodStart);
-    const end = periodSlot(semester.periods, course.periodEnd);
-    if (now && end) {
-      const endsAt = atTime(date, end.end).getTime();
-      if (endsAt <= now.getTime()) continue;
-    }
-    out.push({
-      course,
-      startLabel: start ? start.start : '',
-      endLabel: end ? end.end : '',
-    });
-  }
-  return out;
+  return daySessions(courses, semester, date, now)
+    .filter((session) => !now || session.state !== 'past')
+    .map((session) => ({
+      course: session.course,
+      startLabel: session.start,
+      endLabel: session.end,
+    }));
 }
 
 /**

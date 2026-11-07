@@ -19,14 +19,6 @@ export async function saveData(data: AppData): Promise<void> {
   try {
     await AsyncStorage.setItem(KEY, JSON.stringify(data));
   } catch {
-    // 本地落盘失败不该让界面崩；最坏情况是下次打开退回示例数据
-  }
-}
-
-export async function clearData(): Promise<void> {
-  try {
-    await AsyncStorage.removeItem(KEY);
-  } catch {
-    // 同上
+    // 本地落盘失败不该让界面崩；最坏情况是下次打开还是上次保存的课表
   }
 }

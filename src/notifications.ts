@@ -155,13 +155,6 @@ export async function scheduleReminders(reminders: Reminder[]): Promise<number> 
   return scheduled;
 }
 
-/** 系统里还挂着多少条待发提醒——用来在 UI 上如实显示「已排 N 条」 */
-export async function countScheduled(): Promise<number> {
-  if (!isNotificationSupported()) return 0;
-  const all = await Notifications.getAllScheduledNotificationsAsync();
-  return all.length;
-}
-
 /**
  * 立刻排一条几秒后的测试通知。
  * 课前提醒是「未来的事」，用户没法当场验收；给他一个 5 秒的，权限、通道、

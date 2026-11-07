@@ -127,14 +127,61 @@ export function atTime(date: Date, hhmm: string): Date {
   return d;
 }
 
+export interface DaySession {
+  course: Course;
+  /** 作息表里没配这一节时是空串 */
+  start: string;
+  end: string;
+  startsAt: Date | null;
+  endsAt: Date | null;
+  /** 相对 now 的状态；没传 now 时一律 upcoming */
+  state: 'past' | 'now' | 'upcoming';
+}
+
+/**
+ * 某一天真实要上的课，带上作息表里的起止时刻。
+ *
+ * 「今天有哪些课」这件事今日页和桌面小组件都要问，规则只写这一处：
+ * 不在学期内返回空，传了 now 才算 past/now/upcoming。
+ */
+export function sessionsOnDate(
+  courses: Course[],
+  semester: Semester,
+  date: Date,
+  now?: Date
+): DaySession[] {
+  const week = weekOfDate(date, semester);
+  if (week < 1 || week > semester.totalWeeks) return [];
+
+  return coursesOnDay(courses, week, weekdayOf(date)).map((course) => {
+    const start = periodSlot(semester.periods, course.periodStart);
+    const end = periodSlot(semester.periods, course.periodEnd);
+    const startsAt = start ? atTime(date, start.start) : null;
+    const endsAt = end ? atTime(date, end.end) : null;
+
+    let state: DaySession['state'] = 'upcoming';
+    if (now && startsAt && endsAt) {
+      if (endsAt.getTime() <= now.getTime()) state = 'past';
+      else if (startsAt.getTime() <= now.getTime()) state = 'now';
+    }
+
+    return {
+      course,
+      start: start ? start.start : '',
+      end: end ? end.end : '',
+      startsAt,
+      endsAt,
+      state,
+    };
+  });
+}
+
 export interface UpcomingSession {
   course: Course;
   date: Date;
   startsAt: Date;
   endsAt: Date;
-}
-
-/**
+}/**
  * 从 now 起未来 days 天内所有真实要上的课次。
  * 用于提醒排期：只排真实存在的课，不排「每周固定」的抽象规则。
  */

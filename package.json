@@ -29,7 +29,10 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:test": "tsc src/schedule.ts src/types.ts src/reminders.ts src/theme.ts src/seed.ts src/webimport.ts src/widget/select.ts --ignoreConfig --outDir .tmp --rootDir src --module commonjs --target es2020 --skipLibCheck --esModuleInterop",
+    "pretest": "npm run build:test",
+    "test": "node scripts/verify-schedule.js && node scripts/verify-reminders.js && node scripts/verify-webimport.js && node scripts/verify-webdom.js && node scripts/verify-widget.js"
   },
   "repository": {
     "type": "git",

@@ -10,8 +10,6 @@ import { AppData } from '../types';
 import { renderTodayWidget } from './render-widget';
 import { WIDGET_NAME } from './name';
 
-let warnedMissing = false;
-
 /** 课表一变就推给桌面上所有同名组件 */
 export async function refreshTodayWidget(data: AppData): Promise<void> {
   if (Platform.OS !== 'android') return;
@@ -19,9 +17,6 @@ export async function refreshTodayWidget(data: AppData): Promise<void> {
     await requestWidgetUpdate({
       widgetName: WIDGET_NAME,
       renderWidget: (info) => renderTodayWidget(data, new Date(), info.height),
-      widgetNotFound: () => {
-        warnedMissing = true;
-      },
     });
   } catch {
     // 桌面没有组件时不必打扰用户
@@ -36,8 +31,4 @@ export async function pinTodayWidget(): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-export function widgetMissing(): boolean {
-  return warnedMissing;
 }

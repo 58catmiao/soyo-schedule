@@ -6,8 +6,8 @@
  * 好在 Node 里直接用单测跑。
  */
 
-import { type AppData, type Course, type Semester } from './types';
-import { addDays, mondayOf, parseISODate, toISODate, weekdayOf } from './schedule';
+import { type AppData, type Course, type Semester, type Weekday } from './types';
+import { dateOf, mondayOf, parseISODate, toISODate, weekdayOf } from './schedule';
 import { DEFAULT_PERIODS } from './seed';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -975,8 +975,13 @@ function parsePeriodLabel(label: string | undefined): [number, number] | undefin
  * 那就用行首的节次标签 + 整学期周次补上，别把课丢掉。
  */
 export function cellsToRows(laid: LaidCell[], semester: Semester): CapturedRow[] {
-  const start = mondayOf(parseISODate(semester.startDate) ?? new Date());
-  const allWeeks = Array.from({ length: Math.max(1, semester.totalWeeks) }, (_, i) => i + 1);
+  // 教务系统偶尔给一个不是周一的起始日，先归到那一周的周一，
+  // 这样「第几周第几天」的换算跟 schedule.dateOf 是同一套规则。
+  const aligned: Semester = {
+    ...semester,
+    startDate: toISODate(mondayOf(parseISODate(semester.startDate) ?? new Date())),
+  };
+  const allWeeks = Array.from({ length: Math.max(1, aligned.totalWeeks) }, (_, i) => i + 1);
   const rows: CapturedRow[] = [];
   const periodOfRow = periodsByRow(laid);
 
@@ -1035,7 +1040,7 @@ export function cellsToRows(laid: LaidCell[], semester: Semester): CapturedRow[]
       for (const session of sessions) {
         for (const week of session.weeks) {
           if (week < 1 || week > 40) continue;
-          const date = addDays(start, (week - 1) * 7 + (cell.weekday - 1));
+          const date = dateOf(week, cell.weekday as Weekday, aligned);
           rows.push({
             course_code: header.code || undefined,
             course_name: header.name,

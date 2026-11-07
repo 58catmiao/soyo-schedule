@@ -1,11 +1,10 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Course, Semester, WEEKDAY_LABELS } from '../types';
 import {
+  DaySession,
   UpcomingSession,
   addDays,
-  atTime,
-  coursesOnDay,
-  periodSlot,
+  sessionsOnDate,
   upcomingSessions,
   weekOfDate,
   weekdayOf,
@@ -23,30 +22,9 @@ interface Props {
   onOpenWeek: () => void;
 }
 
-type Row = {
-  course: Course;
-  start: string;
-  end: string;
-  state: 'past' | 'now' | 'upcoming';
-};
-
-function sessionsOn(date: Date, courses: Course[], semester: Semester): Row[] {
-  const week = weekOfDate(date, semester);
-  if (week < 1 || week > semester.totalWeeks) return [];
-  return coursesOnDay(courses, week, weekdayOf(date)).map((course) => {
-    const start = periodSlot(semester.periods, course.periodStart);
-    const end = periodSlot(semester.periods, course.periodEnd);
-    const startText = start ? start.start : '--:--';
-    const endText = end ? end.end : '--:--';
-    let state: Row['state'] = 'upcoming';
-    if (start && end) {
-      const startsAt = atTime(date, start.start).getTime();
-      const endsAt = atTime(date, end.end).getTime();
-      if (endsAt <= date.getTime()) state = 'past';
-      else if (startsAt <= date.getTime()) state = 'now';
-    }
-    return { course, start: startText, end: endText, state };
-  });
+/** 某一屏要显示的一天：把 DaySession 摊平成行 */
+function sessionsOn(date: Date, courses: Course[], semester: Semester): DaySession[] {
+  return sessionsOnDate(courses, semester, date, date);
 }
 
 function countdown(target: Date, now: Date): string {
@@ -67,6 +45,9 @@ function countdown(target: Date, now: Date): string {
 function dayLabel(date: Date): string {
   return `${date.getMonth() + 1}月${date.getDate()}日`;
 }
+
+/** 今日页里一行就是一次课 */
+type Row = DaySession;
 
 /**
  * 同一天里同一门课常常连着排好几段（比如课程设计 08:00、10:10、14:00 各一节）。
