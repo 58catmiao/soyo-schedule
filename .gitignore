@@ -1,0 +1,55 @@
+# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
+
+# dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+*.pem
+
+# local env files
+.env*.local
+
+# typescript
+*.tsbuildinfo
+
+# generated native folders
+/ios
+/android
+
+# 本地自测产物（tsc 编译到 .tmp，二维码/截图放 .preview）
+.tmp/
+.preview/
+
+# 密钥：keystore 与口令文件都不进仓库
+*.keystore
+keystore.properties
+
+# 打包时生成的离线 bundle
+assets/index.android.bundle
+
+# 编辑器/插件本地设置
+.claude/
