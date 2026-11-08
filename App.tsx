@@ -69,6 +69,8 @@ export default function App() {
   const [testState, setTestState] = useState<'idle' | 'sent' | 'failed'>('idle');
   /** launcher 不支持「一键添加」时，改用一页手把手说明 */
   const [pinHintVisible, setPinHintVisible] = useState(false);
+  /** 「放到桌面」的请求有没有被 launcher 接走 —— true 也只代表请求发出去了，不代表真加上了 */
+  const [pinAccepted, setPinAccepted] = useState(false);
   /**
    * 「现在」只给今日页用。
    *
@@ -254,12 +256,14 @@ export default function App() {
   };
 
   /**
-   * 「放到桌面」：国产 launcher 大多不支持直接弹确认框（会返回 false），
-   * 那就退一步，给一页手动添加的说明，别让按钮点了没反应。
+   * 「放到桌面」：`requestPinAppWidget` 返回 true 只代表「请求交给系统了」，
+   * 不代表桌面上真弹了确认框 —— 不少国产 launcher 收下请求后什么也不做。
+   * 所以无论结果如何都给一页手动添加的说明，别让按钮点了像没反应。
    */
   const handlePinWidget = async () => {
     const accepted = await pinTodayWidget();
-    if (!accepted) setPinHintVisible(true);
+    setPinAccepted(accepted);
+    setPinHintVisible(true);
   };
 
   if (!data) {
@@ -463,7 +467,9 @@ export default function App() {
           <Pressable style={styles.pinCard} onPress={() => undefined}>
             <Text style={styles.pinTitle}>把课表放到桌面</Text>
             <Text style={styles.pinBody}>
-              这个手机的桌面不支持 App 直接弹「添加」框，手动加一次就好：
+              {pinAccepted
+                ? '已经请系统添加了。桌面上如果弹出了确认框，点「添加」就好；要是没动静（不少国产桌面会直接忽略这个请求），手动加一次：'
+                : '这个手机的桌面不支持 App 直接弹「添加」框，手动加一次就好：'}
             </Text>
             <Text style={styles.pinStep}>1. 回到桌面，长按空白处</Text>
             <Text style={styles.pinStep}>2. 选「添加小部件 / 桌面小组件」</Text>

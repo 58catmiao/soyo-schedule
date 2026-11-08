@@ -2,7 +2,7 @@
   "expo": {
     "name": "soyo",
     "slug": "soyo",
-    "version": "1.9.1",
+    "version": "1.9.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -12,7 +12,7 @@
     },
     "android": {
       "package": "com.soyo.timetable",
-      "versionCode": 23,
+      "versionCode": 24,
       "adaptiveIcon": {
         "backgroundColor": "#78AB5F",
         "foregroundImage": "./assets/android-icon-foreground.png",

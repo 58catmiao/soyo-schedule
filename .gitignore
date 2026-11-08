@@ -44,6 +44,9 @@ yarn-error.*
 .tmp/
 .preview/
 
+# 本地出包日志（gradlew 的输出在 out/）
+out/
+
 # 密钥：keystore 与口令文件都不进仓库
 *.keystore
 keystore.properties
