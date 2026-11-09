@@ -52,10 +52,6 @@ export function CoursesScreen({ semester, courses, onPressCourse, onAddCourse }:
       >
         <View style={styles.topRow}>
           <Text style={styles.title}>课程</Text>
-          <View style={styles.spacer} />
-          <Pressable onPress={onAddCourse} hitSlop={8} style={styles.textBtnHit}>
-            <Text style={styles.textBtn}>新增</Text>
-          </Pressable>
         </View>
         <Text style={styles.summary}>
           {courses.length} 门课 · 每周 {weeklyPeriods} 节 · 学期 {semester.totalWeeks} 周
@@ -65,7 +61,7 @@ export function CoursesScreen({ semester, courses, onPressCourse, onAddCourse }:
           <View style={styles.empty}>
             <Text style={styles.emptyTitle}>还没有课</Text>
             <Text style={styles.emptyHint}>
-              右上「导入课表」从教务系统拉一份，或者点下面的按钮手动加一门。
+              去「课表」页右上角导入一份，或者点右下角的 ＋ 自己加一门。
             </Text>
           </View>
         ) : (
@@ -117,9 +113,9 @@ export function CoursesScreen({ semester, courses, onPressCourse, onAddCourse }:
 const styles = StyleSheet.create({
   root: { flex: 1 },
   scroll: { flex: 1 },
-  body: { paddingHorizontal: 18, paddingBottom: 96 },
+  body: { paddingHorizontal: 16, paddingBottom: 96 },
   topRow: { flexDirection: 'row', alignItems: 'flex-end' },
-  title: { fontSize: 30, fontWeight: '700', color: colors.ink, letterSpacing: -0.8 },
+  title: { fontSize: 27, fontWeight: '700', color: colors.ink, letterSpacing: -0.7 },
   spacer: { flex: 1 },
   textBtnHit: { paddingVertical: 6, paddingLeft: 12 },
   textBtn: { fontSize: 13, fontWeight: '600', color: colors.pine },

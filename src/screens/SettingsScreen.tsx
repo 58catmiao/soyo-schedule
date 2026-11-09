@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Constants from 'expo-constants';
 import { Semester } from '../types';
 import { ReminderPrefs } from '../reminderPrefs';
+import type { PermissionSnapshot } from '../permissions';
 import { colors, radius } from '../theme';
 import { safeTop } from '../safeArea';
 import { ReminderBar } from '../components/ReminderBar';
@@ -19,11 +20,15 @@ interface Props {
   courseCount: number;
   prefs: ReminderPrefs;
   permission: 'granted' | 'denied' | 'unsupported' | 'unknown';
+  permissions: PermissionSnapshot;
   scheduledCount: number | null;
+  /** 「11 月 10 日 08:45 · 高等数学」，没有排期时为 null */
+  nextReminderLabel: string | null;
   testState: 'idle' | 'sent' | 'failed';
   onToggleReminders: (enabled: boolean) => void;
   onLeadChange: (minutes: number) => void;
   onTestReminder: () => void;
+  onOpenPermissionGuide: () => void;
   onOpenImport: () => void;
   onPinWidget: () => void;
   onShiftStart: (days: number) => void;
@@ -72,11 +77,14 @@ export function SettingsScreen({
   courseCount,
   prefs,
   permission,
+  permissions,
   scheduledCount,
+  nextReminderLabel,
   testState,
   onToggleReminders,
   onLeadChange,
   onTestReminder,
+  onOpenPermissionGuide,
   onOpenImport,
   onPinWidget,
   onShiftStart,
@@ -92,6 +100,10 @@ export function SettingsScreen({
   /** 最近一次网页导入的诊断快照；导入页不再摆日志，都收在这里 */
   const [importLog, setImportLog] = useState<ImportLogEntry | null>(null);
   const [logNote, setLogNote] = useState('');
+
+  const alarmOk = permissions.exactAlarm === 'granted' || permissions.exactAlarm === 'unsupported';
+  const notifyOk = permissions.notifications === 'granted' || permissions.notifications === 'unsupported';
+  const permissionLabel = notifyOk && alarmOk ? '都开了' : '有未开启项';
 
   useEffect(() => {
     let cancelled = false;
@@ -124,6 +136,15 @@ export function SettingsScreen({
     >
       <Text style={styles.title}>设置</Text>
 
+      <Section title="权限">
+        <ActionRow label="提醒送达" value={permissionLabel} onPress={onOpenPermissionGuide} />
+        <Text style={notifyOk && alarmOk ? styles.note : styles.noteDanger}>
+          {notifyOk && alarmOk
+            ? '通知和精确闹钟都在。想让息屏后也准时，再进去把省电设成「不限制」。'
+            : '提醒不响、不震动或不准时，多半是这里没开：通知管响不响，精确闹钟和省电管准不准时。'}
+        </Text>
+      </Section>
+
       <Section title="课前提醒">
         <ReminderBar
           enabled={prefs.enabled}
@@ -148,6 +169,14 @@ export function SettingsScreen({
               ? '发不出去：多半是系统通知权限没开，或者当前是网页预览。'
               : '点一下会在 5 秒后发一条，用来确认权限和声音都正常。'}
         </Text>
+        {nextReminderLabel ? (
+          <View style={styles.kvRow}>
+            <Text style={styles.kvLabel}>下一条</Text>
+            <Text style={styles.kvValue}>{nextReminderLabel}</Text>
+          </View>
+        ) : prefs.enabled ? (
+          <Text style={styles.noteDanger}>现在没有排上任何提醒，检查一下课表和上面的权限。</Text>
+        ) : null}
       </Section>
 
       <Section title="学期">
@@ -280,11 +309,11 @@ export function SettingsScreen({
 
 const styles = StyleSheet.create({
   scroll: { flex: 1 },
-  body: { paddingHorizontal: 18, paddingBottom: 96 },
-  title: { fontSize: 30, fontWeight: '700', color: colors.ink, letterSpacing: -0.8 },
+  body: { paddingHorizontal: 16, paddingBottom: 96 },
+  title: { fontSize: 27, fontWeight: '700', color: colors.ink, letterSpacing: -0.7 },
   section: {
-    marginTop: 22,
-    paddingTop: 16,
+    marginTop: 18,
+    paddingTop: 14,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderColor: colors.ruleStrong,
   },
@@ -309,7 +338,7 @@ const styles = StyleSheet.create({
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 11,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: colors.rule,
   },

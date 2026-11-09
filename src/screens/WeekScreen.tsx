@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Course, Semester } from '../types';
+import { Course, Semester, Todo, Weekday } from '../types';
 import { datesOfWeek, formatRange } from '../schedule';
 import { describeLead } from '../reminders';
 import { colors, radius } from '../theme';
@@ -10,6 +10,7 @@ import { WeekPager, WeekPagerHandle } from '../components/WeekPager';
 interface Props {
   semester: Semester;
   courses: Course[];
+  todos: Todo[];
   week: number;
   currentWeek: number;
   reminderEnabled: boolean;
@@ -18,6 +19,7 @@ interface Props {
   onWeekChange: (week: number) => void;
   onPressCourse: (course: Course) => void;
   onLongPressCourse: (course: Course) => void;
+  onPressBlank: (weekday: Weekday, period: number) => void;
   onOpenImport: () => void;
   onOpenSettings: () => void;
   onAddCourse: () => void;
@@ -26,6 +28,7 @@ interface Props {
 export function WeekScreen({
   semester,
   courses,
+  todos,
   week,
   currentWeek,
   reminderEnabled,
@@ -34,6 +37,7 @@ export function WeekScreen({
   onWeekChange,
   onPressCourse,
   onLongPressCourse,
+  onPressBlank,
   onOpenImport,
   onOpenSettings,
   onAddCourse,
@@ -117,14 +121,8 @@ export function WeekScreen({
           <View style={styles.empty}>
             <Text style={styles.emptyTitle}>课表还是空的</Text>
             <Text style={styles.emptyBody}>
-              从教务系统导入最省事，也可以点右下角的 ＋ 自己加一门。
+              点右上角「导入课表」从教务系统拉一份最省事，也可以点右下角的 ＋ 自己加一门。
             </Text>
-            <Pressable
-              onPress={onOpenImport}
-              style={({ pressed }) => [styles.emptyBtn, pressed && styles.pressed]}
-            >
-              <Text style={styles.emptyBtnText}>导入课表</Text>
-            </Pressable>
           </View>
         ) : null}
 
@@ -136,10 +134,14 @@ export function WeekScreen({
           onWeekChange={onWeekChange}
           onPressCourse={onPressCourse}
           onLongPressCourse={onLongPressCourse}
+          todos={todos}
+          onPressBlank={onPressBlank}
         />
 
         {courses.length > 0 ? (
-          <Text style={styles.hint}>点课块看详情 · 长按直接改 · 左右滑动换周 · 点「第 N 周」回到本周</Text>
+          <Text style={styles.hint}>
+            点课块看详情 · 长按改课 · 点空格加课或待办 · 左右滑动换周
+          </Text>
         ) : null}
       </ScrollView>
 
@@ -161,13 +163,13 @@ const styles = StyleSheet.create({
   topRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
   },
   brand: { fontSize: 15, fontWeight: '700', color: colors.ink, letterSpacing: 1.5 },
   spacer: { flex: 1 },
   textBtnHit: { paddingVertical: 4, paddingLeft: 12 },
   textBtn: { fontSize: 13, fontWeight: '600', color: colors.pine },
-  weekBlock: { paddingHorizontal: 18, marginTop: 6 },
+  weekBlock: { paddingHorizontal: 16, marginTop: 4 },
   weekLine: { flexDirection: 'row', alignItems: 'center' },
   arrowHit: {
     width: 40,
@@ -202,8 +204,8 @@ const styles = StyleSheet.create({
   reminderLine: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 12,
-    marginHorizontal: 18,
+    marginTop: 10,
+    marginHorizontal: 16,
     paddingVertical: 9,
     paddingHorizontal: 12,
     borderRadius: radius.card,
@@ -214,16 +216,16 @@ const styles = StyleSheet.create({
   reminderText: { flex: 1, fontSize: 12, color: colors.inkSoft },
   reminderChevron: { fontSize: 16, color: colors.inkFaint, marginLeft: 6 },
   hint: {
-    marginTop: 14,
-    paddingHorizontal: 18,
+    marginTop: 12,
+    paddingHorizontal: 16,
     fontSize: 11,
     lineHeight: 16,
     color: colors.inkFaint,
   },
   empty: {
-    marginTop: 14,
-    marginHorizontal: 18,
-    padding: 16,
+    marginTop: 12,
+    marginHorizontal: 16,
+    padding: 15,
     borderRadius: radius.card,
     backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
@@ -236,15 +238,6 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     color: colors.inkSoft,
   },
-  emptyBtn: {
-    marginTop: 14,
-    alignSelf: 'flex-start',
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    borderRadius: radius.pill,
-    backgroundColor: colors.pine,
-  },
-  emptyBtnText: { fontSize: 12.5, fontWeight: '700', color: '#FFFFFF' },
   fab: {
     position: 'absolute',
     right: 20,

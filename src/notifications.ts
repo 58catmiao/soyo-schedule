@@ -11,9 +11,13 @@ import { Reminder } from './reminders';
  *
  * v3 相对 v2 的改动：音频用途从 NOTIFICATION 换成 ALARM —— 走闹钟音量，
  * 手机调成振动/静音时也能响；同时 channel 的震动模式重新下发一次。
+ *
+ * v4 相对 v3 的改动：1.9.x 之前从没申请过通知权限和精确闹钟权限，用户装完直接
+ * 遇到「没震动、提醒不响」。v4 跟权限引导一起发，顺便把震动模式重下一次，
+ * 让老用户升级后拿到干净的 channel（旧 id 只用来清理）。
  */
-export const REMINDER_CHANNEL_ID = 'class-reminders-v3';
-const LEGACY_CHANNEL_IDS = ['class-reminders', 'class-reminders-v2'];
+export const REMINDER_CHANNEL_ID = 'class-reminders-v4';
+const LEGACY_CHANNEL_IDS = ['class-reminders', 'class-reminders-v2', 'class-reminders-v3'];
 
 /** 响三下：等一下、震、停、震、停、震 */
 const VIBRATION = [0, 300, 200, 300, 200, 300];

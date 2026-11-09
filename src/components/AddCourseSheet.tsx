@@ -23,6 +23,8 @@ interface Props {
   courses: Course[];
   /** 传了就是「编辑这门课」，不传就是新增 */
   initial?: Course | null;
+  /** 从空白格点进来时预填星期和节次；课程本身仍默认整学期 */
+  prefill?: { weekday: Weekday; periodStart: number; periodEnd: number } | null;
   onClose: () => void;
   onSave: (course: Course) => void;
 }
@@ -65,7 +67,15 @@ function Stepper({
   );
 }
 
-export function AddCourseSheet({ visible, semester, courses, initial, onClose, onSave }: Props) {
+export function AddCourseSheet({
+  visible,
+  semester,
+  courses,
+  initial,
+  prefill,
+  onClose,
+  onSave,
+}: Props) {
   const { translateY, dragHandlers } = useSheetDrag(onClose);
   const [name, setName] = useState('');
   const [teacher, setTeacher] = useState('');
@@ -97,14 +107,17 @@ export function AddCourseSheet({ visible, semester, courses, initial, onClose, o
     setName('');
     setTeacher('');
     setLocation('');
-    setWeekday(1);
-    setPeriodStart(1);
-    setPeriodEnd(2);
+    // 从空白格进来的：星期和节次已经点明了，预填比让用户重选一遍省事
+    const start = prefill?.periodStart ?? 1;
+    const lastPeriod = Math.max(1, semester.periods.length);
+    setWeekday(prefill?.weekday ?? 1);
+    setPeriodStart(start);
+    setPeriodEnd(prefill?.periodEnd ?? Math.min(start + 1, lastPeriod));
     setWeekStart(1);
     setWeekEnd(semester.totalWeeks);
     setParity('all');
     setColorIndex(0);
-  }, [visible, semester.totalWeeks, initial]);
+  }, [visible, semester.totalWeeks, semester.periods.length, initial, prefill]);
 
   const weeks = useMemo(
     () => expandWeeks(weekStart, weekEnd, parity),

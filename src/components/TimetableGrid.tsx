@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import { Course, Semester, WEEKDAY_LABELS, WEEKDAYS } from '../types';
+import { Course, Semester, Todo, WEEKDAY_LABELS, WEEKDAYS, Weekday } from '../types';
 import { coursesInWeek, datesOfWeek, toISODate } from '../schedule';
+import { pendingCountOn } from '../todos';
 import { colors, radius } from '../theme';
 
 const LABEL_W = 30;
@@ -13,6 +14,10 @@ interface Props {
   week: number;
   onPressCourse: (course: Course) => void;
   onLongPressCourse: (course: Course) => void;
+  /** 仅用于表头的小圆点：某天有待办就让日期下面亮一个点 */
+  todos?: Todo[];
+  /** 点空白格子：传回星期和节次，由调用方决定加课还是加待办 */
+  onPressBlank?: (weekday: Weekday, period: number) => void;
 }
 
 export function TimetableGrid({
@@ -21,6 +26,8 @@ export function TimetableGrid({
   week,
   onPressCourse,
   onLongPressCourse,
+  todos,
+  onPressBlank,
 }: Props) {
   const { width: windowWidth } = useWindowDimensions();
   // 用实际量到的容器宽度，而不是窗口宽度：Web 上有滚动条会吃掉十几像素，
@@ -47,6 +54,7 @@ export function TimetableGrid({
         </View>
         {WEEKDAYS.map((wd, i) => {
           const isToday = toISODate(dates[i]) === todayIso;
+          const todoDots = todos ? pendingCountOn(todos, toISODate(dates[i])) : 0;
           return (
             <View
               key={wd}
@@ -58,6 +66,7 @@ export function TimetableGrid({
               <Text style={[styles.headerDate, isToday && styles.headerTextToday]}>
                 {dates[i].getDate()}
               </Text>
+              {todoDots > 0 ? <View style={styles.headerTodoDot} /> : null}
             </View>
           );
         })}
@@ -71,7 +80,15 @@ export function TimetableGrid({
               <Text style={styles.labelText}>{slot.period}</Text>
             </View>
             {WEEKDAYS.map((wd) => (
-              <View key={wd} style={[styles.cell, { width: dayW }]} />
+              <Pressable
+                key={wd}
+                accessibilityRole={onPressBlank ? 'button' : undefined}
+                accessibilityLabel={
+                  onPressBlank ? `周${WEEKDAY_LABELS[wd]} 第 ${slot.period} 节，空白处` : undefined
+                }
+                onPress={onPressBlank ? () => onPressBlank(wd, slot.period) : undefined}
+                style={[styles.cell, { width: dayW }]}
+              />
             ))}
           </View>
         ))}
@@ -159,6 +176,13 @@ const styles = StyleSheet.create({
   },
   headerTextToday: {
     color: colors.pine,
+  },
+  headerTodoDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.pine,
+    marginTop: 2,
   },
   row: {
     flexDirection: 'row',

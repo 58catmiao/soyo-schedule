@@ -9,10 +9,12 @@
  */
 const {
   applyCaptured,
+  cellsToRows,
   consumeMessage,
   decodeBase64ToText,
   emptyCapture,
   layoutTable,
+  parseCourseBlocks,
   pickRows,
   pickSemesters,
   semesterFromCaptured,
@@ -189,6 +191,60 @@ check('被盖住的格子不发时仍能补列', sig(layoutTable(sparseRow)) ===
   check('同时段换教室的实验课合成一门（不是叠成两块）', merged.courses.length === 1);
   check('合成后的周次是两段的并集', JSON.stringify(merged.courses[0].weeks) === '[4,6]');
   check('换过的老师都留着', merged.courses[0].teacher === '张美香、李四');
+}
+
+// 单双周的三种真实写法：奇偶写在括号外、紧跟周次、嵌套在里层
+// 1.9.2 的 bug 是这几种都解析不出奇偶，cellsToRows 最后兜底成全周。
+{
+  const paren = parseCourseBlocks('高等数学 B1234560 (9-15周)(单)(1-2节) 教一-201 张老师');
+  const s1 = paren[0] && paren[0].sessions[0];
+  check('周次括号 + 单独的(单) → parity=odd', s1 && s1.parity === 'odd');
+  check('单周只留奇数周', s1 && s1.weeks.join(',') === '9,11,13,15');
+
+  const bare = parseCourseBlocks('大学物理 B1234501 第1-6周双周(3-4节) 教二-101 李老师');
+  const s2 = bare[0] && bare[0].sessions[0];
+  check('不带括号的「1-6周双周」→ parity=even', s2 && s2.parity === 'even');
+  check('双周只留偶数周', s2 && s2.weeks.join(',') === '2,4,6');
+
+  const nested = parseCourseBlocks('材料物理 B1234567 (11-15(单)周)(1-2节) 教三-202 王老师');
+  const s3 = nested[0] && nested[0].sessions[0];
+  check('嵌套括号「(11-15(单)周)」仍然只留奇数周', s3 && s3.weeks.join(',') === '11,13,15');
+}
+
+// 落到表格 → 记录这一段：单周课只该生成 3 条（第 1/3/5 周），不能铺满 6 周
+{
+  const semester = { name: '2026 秋', startDate: '2026-09-07', totalWeeks: 6, periods: [] };
+  const oddRows = cellsToRows(
+    [
+      {
+        weekday: 1,
+        text: '材料物理 B1234567 (1-6周)(单)(1-2节) 教三-202 王老师',
+        row: 0,
+        span: 2,
+        rowLabel: '1-2',
+      },
+    ],
+    semester,
+  );
+  check('单周课只生成奇数周那几条（3 条，不是 6 条）', oddRows.length === 3);
+  check(
+    '生成的日期确实是第 1/3/5 周的周一',
+    oddRows.map((r) => r.date).join(',') === '2026-09-07,2026-09-21,2026-10-05',
+  );
+
+  const allRows = cellsToRows(
+    [
+      {
+        weekday: 1,
+        text: '材料物理 B1234567 (1-6周)(1-2节) 教三-202 王老师',
+        row: 0,
+        span: 2,
+        rowLabel: '1-2',
+      },
+    ],
+    semester,
+  );
+  check('没写单双周的课仍然按整段周次展开（6 条）', allRows.length === 6);
 }
 
 console.log(`\n${pass} 通过 / ${fail} 失败`);

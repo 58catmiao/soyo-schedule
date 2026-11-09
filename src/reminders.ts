@@ -34,6 +34,18 @@ export const DEFAULT_REMINDER_OPTIONS: ReminderOptions = {
   maxCount: 60,
 };
 
+/**
+ * App 里真正用来排期的口径：窗口放宽到 21 天。
+ *
+ * 章节里「打开 App 才滚排」是个已知短板——以前窗口 7 天，超过一周没打开
+ * soyo 提醒就断档。21 天配合最多 60 条（20 节课/周时约覆盖 3 周），
+ * 断档风险小得多，而且不增加任何后台任务。
+ */
+export const RESCHEDULE_OPTIONS: ReminderOptions = {
+  ...DEFAULT_REMINDER_OPTIONS,
+  days: 21,
+};
+
 /** 常用提前量（只是快捷按钮，真正存的是用户自己填的分钟数） */
 export const LEAD_CHOICES = [5, 10, 15, 30, 60];
 

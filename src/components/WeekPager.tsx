@@ -17,7 +17,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { Course, Semester } from '../types';
+import { Course, Semester, Todo, Weekday } from '../types';
 import { TimetableGrid } from './TimetableGrid';
 
 /** 横向划过这么多像素才接管手势，避免轻点课块被当成滑动 */
@@ -56,6 +56,8 @@ interface Props {
   onWeekChange: (week: number) => void;
   onPressCourse: (course: Course) => void;
   onLongPressCourse: (course: Course) => void;
+  todos?: Todo[];
+  onPressBlank?: (weekday: Weekday, period: number) => void;
 }
 
 /**
@@ -70,7 +72,16 @@ interface Props {
  * 中间那一帧，所以看不出接缝。
  */
 export const WeekPager = forwardRef<WeekPagerHandle, Props>(function WeekPager(
-  { semester, courses, week, onWeekChange, onPressCourse, onLongPressCourse },
+  {
+    semester,
+    courses,
+    week,
+    onWeekChange,
+    onPressCourse,
+    onLongPressCourse,
+    todos,
+    onPressBlank,
+  },
   ref
 ) {
   const { width: windowWidth } = useWindowDimensions();
@@ -282,6 +293,8 @@ export const WeekPager = forwardRef<WeekPagerHandle, Props>(function WeekPager(
                 week={w}
                 onPressCourse={onPressCourse}
                 onLongPressCourse={onLongPressCourse}
+                todos={todos}
+                onPressBlank={onPressBlank}
               />
             ) : null}
           </View>

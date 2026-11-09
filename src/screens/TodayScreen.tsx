@@ -1,14 +1,16 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Course, Semester, WEEKDAY_LABELS } from '../types';
+import { Course, Semester, Todo, WEEKDAY_LABELS } from '../types';
 import {
   DaySession,
   UpcomingSession,
   addDays,
   sessionsOnDate,
+  toISODate,
   upcomingSessions,
   weekOfDate,
   weekdayOf,
 } from '../schedule';
+import { describeDate, todoStats, todosForToday } from '../todos';
 import { colors, courseAccent, radius } from '../theme';
 import { safeTop } from '../safeArea';
 
@@ -17,9 +19,13 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 interface Props {
   semester: Semester;
   courses: Course[];
+  todos: Todo[];
   now: Date;
   onPressCourse: (course: Course) => void;
   onOpenWeek: () => void;
+  onOpenTodo: (todo: Todo) => void;
+  onToggleTodo: (id: string) => void;
+  onOpenTodos: () => void;
 }
 
 /** 某一屏要显示的一天：把 DaySession 摊平成行 */
@@ -127,8 +133,19 @@ function NextCard({
   );
 }
 
-export function TodayScreen({ semester, courses, now, onPressCourse, onOpenWeek }: Props) {
+export function TodayScreen({
+  semester,
+  courses,
+  todos,
+  now,
+  onPressCourse,
+  onOpenWeek,
+  onOpenTodo,
+  onToggleTodo,
+  onOpenTodos,
+}: Props) {
   const topPad = safeTop();
+  const todayIso = toISODate(now);
   const week = weekOfDate(now, semester);
   const inRange = week >= 1 && week <= semester.totalWeeks;
   const weekday = weekdayOf(now);
@@ -143,6 +160,9 @@ export function TodayScreen({ semester, courses, now, onPressCourse, onOpenWeek 
   const later = upcoming.filter(
     (s) => !nextSession || s.startsAt.getTime() > nextSession.startsAt.getTime()
   );
+
+  const todoItems = todosForToday(todos, todayIso);
+  const todoInfo = todoStats(todos, todayIso);
 
   return (
     <ScrollView
@@ -174,6 +194,71 @@ export function TodayScreen({ semester, courses, now, onPressCourse, onOpenWeek 
           <Text style={styles.emptyTitle}>接下来两周没有课</Text>
           <Text style={styles.emptyHint}>导入课表之后，这里会显示你最近的一节课</Text>
         </View>
+      )}
+
+      <View style={styles.sectionHead}>
+        <Text style={styles.sectionTitle}>待办</Text>
+        <Text style={styles.sectionCount}>
+          {todoInfo.pending === 0
+            ? todoInfo.doneToday > 0
+              ? '都做完了'
+              : '没有'
+            : `${todoInfo.pending} 件${todoInfo.overdue > 0 ? ` · ${todoInfo.overdue} 件逾期` : ''}`}
+        </Text>
+        <View style={styles.spacer} />
+        <Pressable onPress={onOpenTodos} hitSlop={10}>
+          <Text style={styles.textBtn}>全部 ›</Text>
+        </Pressable>
+      </View>
+
+      {todoItems.length === 0 ? (
+        <Text style={styles.quiet}>今天没有待办。</Text>
+      ) : (
+        <>
+          {todoItems.slice(0, 3).map((todo) => {
+            const overdue = todo.date < todayIso;
+            return (
+              <View key={todo.id} style={styles.row}>
+                <Pressable
+                  onPress={() => onToggleTodo(todo.id)}
+                  hitSlop={8}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: todo.done }}
+                  accessibilityLabel={`${todo.title}，${todo.done ? '已完成' : '未完成'}`}
+                  style={styles.checkHit}
+                >
+                  <View style={[styles.checkbox, todo.done && styles.checkboxOn]}>
+                    {todo.done ? <Text style={styles.checkboxMark}>✓</Text> : null}
+                  </View>
+                </Pressable>
+                <Pressable
+                  onPress={() => onOpenTodo(todo)}
+                  style={({ pressed }) => [styles.rowMain, pressed && styles.pressed]}
+                >
+                  <Text
+                    numberOfLines={2}
+                    style={[styles.rowName, todo.done && styles.todoDone]}
+                  >
+                    {todo.title}
+                  </Text>
+                  <Text
+                    numberOfLines={1}
+                    style={[styles.rowMeta, overdue && !todo.done && styles.overdue]}
+                  >
+                    {overdue ? `逾期 · ${describeDate(todo.date, todayIso)}` : todo.note || '今天'}
+                  </Text>
+                </Pressable>
+              </View>
+            );
+          })}
+          {todoItems.length > 3 ? (
+            <Pressable onPress={onOpenTodos} hitSlop={8}>
+              <Text style={styles.moreLink}>
+                还有 {todoItems.length - 3} 条，去待办里看 ›
+              </Text>
+            </Pressable>
+          ) : null}
+        </>
       )}
 
       <View style={styles.sectionHead}>
@@ -308,13 +393,13 @@ export function TodayScreen({ semester, courses, now, onPressCourse, onOpenWeek 
 
 const styles = StyleSheet.create({
   scroll: { flex: 1 },
-  body: { paddingHorizontal: 18, paddingBottom: 40 },
+  body: { paddingHorizontal: 16, paddingBottom: 40 },
   topRow: { flexDirection: 'row', alignItems: 'flex-end' },
-  date: { fontSize: 30, fontWeight: '700', color: colors.ink, letterSpacing: -0.8 },
+  date: { fontSize: 27, fontWeight: '700', color: colors.ink, letterSpacing: -0.7 },
   spacer: { flex: 1 },
   textBtnHit: { paddingVertical: 6, paddingLeft: 12 },
   textBtn: { fontSize: 13, fontWeight: '600', color: colors.pine },
-  weekday: { fontSize: 13, color: colors.inkSoft, marginTop: 2, marginBottom: 18 },
+  weekday: { fontSize: 13, color: colors.inkSoft, marginTop: 2, marginBottom: 12 },
   nextCard: {
     flexDirection: 'row',
     backgroundColor: colors.surface,
@@ -324,7 +409,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   nextBar: { width: 4 },
-  nextBody: { flex: 1, paddingHorizontal: 14, paddingVertical: 13 },
+  nextBody: { flex: 1, paddingHorizontal: 14, paddingVertical: 12 },
   nextLabel: { fontSize: 11, fontWeight: '700', color: colors.pine, letterSpacing: 2 },
   nextName: { fontSize: 20, fontWeight: '700', color: colors.ink, marginTop: 4, letterSpacing: -0.3 },
   nextMeta: { fontSize: 13, color: colors.inkSoft, marginTop: 6 },
@@ -341,16 +426,31 @@ const styles = StyleSheet.create({
   sectionHead: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    marginTop: 26,
-    marginBottom: 6,
+    marginTop: 18,
+    marginBottom: 5,
   },
   sectionTitle: { fontSize: 15, fontWeight: '700', color: colors.ink },
   sectionCount: { fontSize: 12, color: colors.inkFaint, marginLeft: 8 },
-  quiet: { fontSize: 13, color: colors.inkFaint, paddingVertical: 10 },
+  quiet: { fontSize: 13, color: colors.inkFaint, paddingVertical: 8 },
+  moreLink: { marginTop: 10, fontSize: 12, fontWeight: '600', color: colors.pine },
+  checkHit: { paddingRight: 12, paddingVertical: 6 },
+  checkbox: {
+    width: 21,
+    height: 21,
+    borderRadius: 11,
+    borderWidth: 1.5,
+    borderColor: colors.ruleStrong,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxOn: { backgroundColor: colors.pine, borderColor: colors.pine },
+  checkboxMark: { fontSize: 12, fontWeight: '700', color: '#FFFFFF', lineHeight: 14 },
+  todoDone: { color: colors.inkFaint, textDecorationLine: 'line-through' },
+  overdue: { color: colors.danger },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 11,
+    paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: colors.rule,
   },

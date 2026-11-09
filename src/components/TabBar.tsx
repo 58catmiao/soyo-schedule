@@ -1,20 +1,21 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors } from '../theme';
 
-export type Tab = 'week' | 'today' | 'courses' | 'settings';
+export type Tab = 'week' | 'today' | 'courses' | 'todos' | 'settings';
 
 const ITEMS: { key: Tab; label: string }[] = [
   { key: 'week', label: '课表' },
   { key: 'today', label: '今日' },
   { key: 'courses', label: '课程' },
+  { key: 'todos', label: '待办' },
   { key: 'settings', label: '设置' },
 ];
 
 /**
- * 底部四个入口。
+ * 底部五个入口。
  *
- * 不用图标：字形本身就是这个 App 的信息层级（课表 / 今日 / 课程 / 设置
- * 四个词够短），省一整套图标资源，也少一层视觉噪音。选中态靠「墨色 + 下方一条松绿短线」。
+ * 不用图标：字形本身就是这个 App 的信息层级（课表 / 今日 / 课程 / 待办 / 设置
+ * 五个词够短），省一整套图标资源，也少一层视觉噪音。选中态靠「墨色 + 下方一条松绿短线」。
  */
 export function TabBar({ value, onChange }: { value: Tab; onChange: (tab: Tab) => void }) {
   return (

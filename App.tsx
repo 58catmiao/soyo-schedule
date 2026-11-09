@@ -1,45 +1,38 @@
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
-import { AppData, Course } from './src/types';
-import { addDays, parseISODate, toISODate, weekOfDate } from './src/schedule';
+import { StyleSheet, Text, View } from 'react-native';
+import { AppData, Course, WEEKDAY_LABELS, Weekday } from './src/types';
+import { addDays, dateOf, parseISODate, toISODate, weekOfDate } from './src/schedule';
 import { makeInitialSemester } from './src/seed';
 import { loadData, saveData } from './src/storage';
 import { DEFAULT_PREFS, ReminderPrefs, loadPrefs, savePrefs } from './src/reminderPrefs';
+import { clampLead } from './src/reminders';
 import {
-  DEFAULT_REMINDER_OPTIONS,
-  buildReminders,
-  clampLead,
-  reminderSignature,
-} from './src/reminders';
-import {
-  cancelAllReminders,
-  ensurePermission,
-  isNotificationSupported,
-  scheduleReminders,
-  sendTestReminder,
-} from './src/notifications';
-import { colors, radius } from './src/theme';
+  openAppSettings,
+  openAutoStartSettings,
+  openBatteryOptimizationSettings,
+} from './src/permissions';
+import { describeDate } from './src/todos';
+import { colors } from './src/theme';
 import { AddCourseSheet } from './src/components/AddCourseSheet';
+import { AddTodoSheet } from './src/components/AddTodoSheet';
 import { CourseDetailSheet } from './src/components/CourseDetailSheet';
+import { PermissionSheet } from './src/components/PermissionSheet';
+import { PinHintModal } from './src/components/PinHintModal';
+import { SlotActionSheet } from './src/components/SlotActionSheet';
 import WebImportSheet from './src/components/WebImportSheet';
 import { TabBar, Tab } from './src/components/TabBar';
 import { WeekScreen } from './src/screens/WeekScreen';
 import { TodayScreen } from './src/screens/TodayScreen';
 import { CoursesScreen } from './src/screens/CoursesScreen';
+import { TodosScreen } from './src/screens/TodosScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { pinTodayWidget, refreshTodayWidget } from './src/widget/refresh';
 import { safeBottom } from './src/safeArea';
-import Constants from 'expo-constants';
-import {
-  AUTO_CHECK_INTERVAL_MS,
-  UpdateInfo,
-  UpdateStatus,
-  fetchLatestRelease,
-  openUpdate,
-  readLastCheck,
-  writeLastCheck,
-} from './src/updater';
+import { openUpdate } from './src/updater';
+import { useReminderScheduling } from './src/hooks/useReminderScheduling';
+import { useTodoActions } from './src/hooks/useTodoActions';
+import { useUpdateCheck } from './src/hooks/useUpdateCheck';
 
 /**
  * 周次永远落在 1..总周数 之间。
@@ -62,15 +55,20 @@ export default function App() {
   const [webImportVisible, setWebImportVisible] = useState(false);
   const [detail, setDetail] = useState<Course | null>(null);
   const [prefs, setPrefs] = useState<ReminderPrefs>(DEFAULT_PREFS);
-  const [permission, setPermission] = useState<
-    'granted' | 'denied' | 'unsupported' | 'unknown'
-  >(isNotificationSupported() ? 'unknown' : 'unsupported');
-  const [scheduledCount, setScheduledCount] = useState<number | null>(null);
-  const [testState, setTestState] = useState<'idle' | 'sent' | 'failed'>('idle');
   /** launcher 不支持「一键添加」时，改用一页手把手说明 */
   const [pinHintVisible, setPinHintVisible] = useState(false);
   /** 「放到桌面」的请求有没有被 launcher 接走 —— true 也只代表请求发出去了，不代表真加上了 */
   const [pinAccepted, setPinAccepted] = useState(false);
+  /** 点空白格后先问「加课还是加待办」 */
+  const [slot, setSlot] = useState<{ weekday: Weekday; period: number; date: string } | null>(
+    null
+  );
+  /** 从空白格进建课表单时预填的星期 / 节次 */
+  const [addPrefill, setAddPrefill] = useState<{
+    weekday: Weekday;
+    periodStart: number;
+    periodEnd: number;
+  } | null>(null);
   /**
    * 「现在」只给今日页用。
    *
@@ -78,6 +76,46 @@ export default function App() {
    * 现在只有停在今日页时才走表，切过去的那一刻也先取一次最新时间。
    */
   const [now, setNow] = useState(() => new Date());
+
+  /**
+   * 只在用户真的改动了课表时落盘。
+   * 早先是在 data 一变就自动保存，结果**首次打开就会把示例数据写死进本地**，
+   * 之后改示例作息表、改学期起始日，App 里永远是旧的那份——调试时会被坑。
+   */
+  const commit = useCallback((updater: (prev: AppData) => AppData) => {
+    // 落盘不放在 updater 里：updater 会被 React 重复调用（StrictMode 下尤其），
+    // 副作用混在里面既可能写两次，写失败也没人知道。这里只打标记，写到 effect 里。
+    dirtyRef.current = true;
+    setData((prev) => (prev ? updater(prev) : prev));
+  }, []);
+
+  const {
+    permission,
+    permissions,
+    permissionSheetVisible,
+    setPermissionSheetVisible,
+    scheduledCount,
+    testState,
+    nextReminderLabel,
+    invalidateSchedule,
+    handleRequestNotifications,
+    handleRequestExactAlarm,
+    handleTestReminder,
+  } = useReminderScheduling(data, prefs);
+
+  const {
+    todoSheetVisible,
+    editingTodo,
+    todoDate,
+    openNewTodo,
+    openTodo,
+    closeTodoSheet,
+    saveTodo,
+    toggleTodo,
+    deleteTodo,
+  } = useTodoActions(commit);
+
+  const { updateInfo, updateStatus, checkUpdate } = useUpdateCheck();
 
   useEffect(() => {
     if (tab !== 'today') return undefined;
@@ -121,120 +159,17 @@ export default function App() {
     setWeek((w) => clampWeek(w, data.semester.totalWeeks));
   }, [data]);
 
-  /**
-   * 只在用户真的改动了课表时落盘。
-   * 早先是在 data 一变就自动保存，结果**首次打开就会把示例数据写死进本地**，
-   * 之后改示例作息表、改学期起始日，App 里永远是旧的那份——调试时会被坑。
-   */
-  const commit = useCallback((updater: (prev: AppData) => AppData) => {
-    // 落盘不放在 updater 里：updater 会被 React 重复调用（StrictMode 下尤其），
-    // 副作用混在里面既可能写两次，写失败也没人知道。这里只打标记，写到 effect 里。
-    dirtyRef.current = true;
-    setData((prev) => (prev ? updater(prev) : prev));
-  }, []);
-
   useEffect(() => {
     if (!dirtyRef.current || !data) return;
     dirtyRef.current = false;
     void saveData(data);
   }, [data]);
 
-  /**
-   * 回到前台时叫醒一次：排期窗口只有 7 天，连续一周不开 App，
-   * 下周的课就一条提醒都没有。顺手也重读一次权限——
-   * 用户去系统设置里开了通知、再切回来，状态才会跟着变。
-   */
-  const [resumeTick, setResumeTick] = useState(0);
-  useEffect(() => {
-    const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') setResumeTick((n) => n + 1);
-    });
-    return () => sub.remove();
-  }, []);
-
-  /**
-   * 课表或提醒设置一变就重排通知。
-   *
-   * 只在原生端真做（网页版没有通知通道）。排期指纹没变的就不重复打扰系统。
-   */
-  const lastSignature = useRef<string>('');
-  useEffect(() => {
-    if (!data) return;
-    let cancelled = false;
-
-    (async () => {
-      if (!prefs.enabled) {
-        await cancelAllReminders();
-        lastSignature.current = '';
-        if (!cancelled) setScheduledCount(0);
-        return;
-      }
-
-      const state = await ensurePermission();
-      if (cancelled) return;
-      setPermission(state);
-      if (state !== 'granted') {
-        if (!cancelled) setScheduledCount(null);
-        return;
-      }
-
-      const reminders = buildReminders(data.courses, data.semester, new Date(), {
-        ...DEFAULT_REMINDER_OPTIONS,
-        leadMinutes: prefs.leadMinutes,
-      });
-      const signature = reminderSignature(reminders);
-      if (signature === lastSignature.current) return;
-
-      // 指纹要等真的排上了再记：先记账再排的话，一旦失败就再也不会重试，
-      // 用户看着「已排 30 条」，其实一条都没进系统。
-      try {
-        const count = await scheduleReminders(reminders);
-        lastSignature.current = signature;
-        if (!cancelled) setScheduledCount(count);
-      } catch {
-        lastSignature.current = '';
-        if (!cancelled) setScheduledCount(null);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [data, prefs.enabled, prefs.leadMinutes, resumeTick]);
-
   /** 课表一变就顺手把桌面小组件刷一遍（桌面上没放组件时什么都不会发生） */
   useEffect(() => {
     if (!data) return;
     void refreshTodayWidget(data);
   }, [data]);
-
-  /**
-   * 应用内更新：启动时最多每 6 小时查一次 GitHub 上的最新 release，
-   * 设置页也能手动点。只提示 + 打开下载地址，装包交给系统。
-   */
-  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
-  const [updateStatus, setUpdateStatus] = useState<UpdateStatus>('idle');
-
-  const runUpdateCheck = useCallback(async (manual: boolean) => {
-    const current = Constants.expoConfig?.version ?? '0.0.0';
-    if (!manual) {
-      const last = await readLastCheck();
-      if (Date.now() - last < AUTO_CHECK_INTERVAL_MS) return;
-    }
-    setUpdateStatus('checking');
-    try {
-      const info = await fetchLatestRelease(current);
-      await writeLastCheck(Date.now());
-      setUpdateInfo(info);
-      setUpdateStatus(info ? 'available' : 'latest');
-    } catch {
-      setUpdateStatus('error');
-    }
-  }, []);
-
-  useEffect(() => {
-    void runUpdateCheck(false);
-  }, [runUpdateCheck]);
 
   const handleToggleReminders = (enabled: boolean) => {
     const next = { ...prefs, enabled };
@@ -246,13 +181,7 @@ export default function App() {
     const next = { ...prefs, leadMinutes: clampLead(minutes) };
     setPrefs(next);
     void savePrefs(next);
-    lastSignature.current = '';
-  };
-
-  const handleTestReminder = async () => {
-    const ok = await sendTestReminder(5);
-    setTestState(ok ? 'sent' : 'failed');
-    setTimeout(() => setTestState('idle'), 10_000);
+    invalidateSchedule();
   };
 
   /**
@@ -281,7 +210,30 @@ export default function App() {
 
   const openAddCourse = () => {
     setEditing(null);
+    setAddPrefill(null);
     setSheetVisible(true);
+  };
+
+  /** 点空白格：先问加课还是加待办，不直接替用户选 */
+  const openBlankSlot = (weekday: Weekday, period: number) => {
+    setSlot({ weekday, period, date: toISODate(dateOf(week, weekday, semester)) });
+  };
+
+  const handleAddCourseFromSlot = () => {
+    if (!slot) return;
+    setAddPrefill({
+      weekday: slot.weekday,
+      periodStart: slot.period,
+      periodEnd: Math.min(slot.period + 1, semester.periods.length),
+    });
+    setEditing(null);
+    setSheetVisible(true);
+    setSlot(null);
+  };
+
+  const handleAddTodoFromSlot = () => {
+    openNewTodo(slot ? slot.date : undefined);
+    setSlot(null);
   };
 
   const openEditCourse = (course: Course) => {
@@ -315,7 +267,7 @@ export default function App() {
 
   const handleClearCourses = () => {
     commit((prev) => ({ ...prev, courses: [] }));
-    lastSignature.current = '';
+    invalidateSchedule();
   };
 
   const handleImported = (nextSemester: AppData['semester'], nextCourses: Course[]) => {
@@ -323,7 +275,7 @@ export default function App() {
     setWeek(clampWeek(weekOfDate(new Date(), nextSemester), nextSemester.totalWeeks));
     setWebImportVisible(false);
     // 课表整个换了，通知要重排
-    lastSignature.current = '';
+    invalidateSchedule();
   };
 
   const handleShiftStart = (days: number) => {
@@ -334,7 +286,7 @@ export default function App() {
         startDate: toISODate(addDays(parseISODate(prev.semester.startDate), days)),
       },
     }));
-    lastSignature.current = '';
+    invalidateSchedule();
   };
 
   const handleChangeWeeks = (delta: number) => {
@@ -345,7 +297,7 @@ export default function App() {
         totalWeeks: Math.min(30, Math.max(1, prev.semester.totalWeeks + delta)),
       },
     }));
-    lastSignature.current = '';
+    invalidateSchedule();
   };
 
   return (
@@ -362,8 +314,10 @@ export default function App() {
             reminderEnabled={prefs.enabled}
             leadMinutes={prefs.leadMinutes}
             scheduledCount={scheduledCount}
+            todos={data.todos ?? []}
             onWeekChange={(w) => setWeek(Math.min(Math.max(1, w), totalWeeks))}
             onPressCourse={(c) => setDetail(c)}
+            onPressBlank={openBlankSlot}
             onLongPressCourse={(c) => {
               // 单击看详情、长按直接改：原来两个手势都只是打开详情，长按等于白按
               setEditing(c);
@@ -380,8 +334,22 @@ export default function App() {
             semester={semester}
             courses={courses}
             now={now}
+            todos={data.todos ?? []}
             onPressCourse={(c) => setDetail(c)}
             onOpenWeek={() => setTab('week')}
+            onOpenTodo={openTodo}
+            onToggleTodo={toggleTodo}
+            onOpenTodos={() => setTab('todos')}
+          />
+        ) : null}
+
+        {tab === 'todos' ? (
+          <TodosScreen
+            todos={data.todos ?? []}
+            today={toISODate(new Date())}
+            onCreate={() => openNewTodo()}
+            onOpenTodo={openTodo}
+            onToggleTodo={toggleTodo}
           />
         ) : null}
 
@@ -400,13 +368,16 @@ export default function App() {
             courseCount={courses.length}
             prefs={prefs}
             permission={permission}
+            permissions={permissions}
             scheduledCount={scheduledCount}
+            nextReminderLabel={nextReminderLabel}
             testState={testState}
             onToggleReminders={handleToggleReminders}
             onLeadChange={handleLeadChange}
             onTestReminder={() => {
               void handleTestReminder();
             }}
+            onOpenPermissionGuide={() => setPermissionSheetVisible(true)}
             onOpenImport={() => setWebImportVisible(true)}
             onPinWidget={() => {
               void handlePinWidget();
@@ -417,7 +388,7 @@ export default function App() {
             updateInfo={updateInfo}
             updateStatus={updateStatus}
             onCheckUpdate={() => {
-              void runUpdateCheck(true);
+              void checkUpdate(true);
             }}
             onOpenUpdate={() => {
               if (updateInfo) void openUpdate(updateInfo);
@@ -435,11 +406,53 @@ export default function App() {
         semester={semester}
         courses={courses}
         initial={editing}
+        prefill={addPrefill}
         onClose={() => {
           setSheetVisible(false);
           setEditing(null);
+          setAddPrefill(null);
         }}
         onSave={handleSaveCourse}
+      />
+
+      <SlotActionSheet
+        visible={slot !== null}
+        slotLabel={slot ? `周${WEEKDAY_LABELS[slot.weekday]} 第 ${slot.period} 节` : ''}
+        dateLabel={slot ? describeDate(slot.date, toISODate(new Date())) : ''}
+        onAddCourse={handleAddCourseFromSlot}
+        onAddTodo={handleAddTodoFromSlot}
+        onClose={() => setSlot(null)}
+      />
+
+      <AddTodoSheet
+        visible={todoSheetVisible}
+        date={todoDate}
+        today={toISODate(new Date())}
+        initial={editingTodo}
+        onClose={closeTodoSheet}
+        onSave={saveTodo}
+        onDelete={editingTodo ? () => deleteTodo(editingTodo.id) : undefined}
+      />
+
+      <PermissionSheet
+        visible={permissionSheetVisible}
+        snapshot={permissions}
+        onRequestNotifications={() => {
+          void handleRequestNotifications();
+        }}
+        onRequestExactAlarm={() => {
+          void handleRequestExactAlarm();
+        }}
+        onOpenBattery={() => {
+          void openBatteryOptimizationSettings();
+        }}
+        onOpenAutoStart={() => {
+          void openAutoStartSettings();
+        }}
+        onOpenAppSettings={() => {
+          void openAppSettings();
+        }}
+        onClose={() => setPermissionSheetVisible(false)}
       />
 
       <CourseDetailSheet
@@ -457,35 +470,11 @@ export default function App() {
         onImported={handleImported}
       />
 
-      <Modal
+      <PinHintModal
         visible={pinHintVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setPinHintVisible(false)}
-      >
-        <Pressable style={styles.pinBackdrop} onPress={() => setPinHintVisible(false)}>
-          <Pressable style={styles.pinCard} onPress={() => undefined}>
-            <Text style={styles.pinTitle}>把课表放到桌面</Text>
-            <Text style={styles.pinBody}>
-              {pinAccepted
-                ? '已经请系统添加了。桌面上如果弹出了确认框，点「添加」就好；要是没动静（不少国产桌面会直接忽略这个请求），手动加一次：'
-                : '这个手机的桌面不支持 App 直接弹「添加」框，手动加一次就好：'}
-            </Text>
-            <Text style={styles.pinStep}>1. 回到桌面，长按空白处</Text>
-            <Text style={styles.pinStep}>2. 选「添加小部件 / 桌面小组件」</Text>
-            <Text style={styles.pinStep}>3. 找到「soyo」，选「soyo 今日课表」拖到桌面</Text>
-            <Text style={styles.pinNote}>
-              放好之后不用管它：只要课表有变化、或者你打开一次 soyo，组件就会自己刷新。
-            </Text>
-            <Pressable
-              onPress={() => setPinHintVisible(false)}
-              style={({ pressed }) => [styles.pinBtn, pressed && styles.pressed]}
-            >
-              <Text style={styles.pinBtnText}>知道了</Text>
-            </Pressable>
-          </Pressable>
-        </Pressable>
-      </Modal>
+        accepted={pinAccepted}
+        onClose={() => setPinHintVisible(false)}
+      />
     </View>
   );
 }
@@ -501,32 +490,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   bootText: { fontSize: 20, fontWeight: '700', color: colors.ink, letterSpacing: 3 },
-  pressed: { opacity: 0.7 },
-  pinBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(17,20,28,0.45)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  pinCard: {
-    width: '100%',
-    maxWidth: 340,
-    backgroundColor: colors.surface,
-    borderRadius: radius.sheet,
-    padding: 20,
-  },
-  pinTitle: { fontSize: 17, fontWeight: '700', color: colors.ink },
-  pinBody: { marginTop: 8, fontSize: 13, lineHeight: 20, color: colors.inkSoft },
-  pinStep: { marginTop: 8, fontSize: 13, lineHeight: 20, color: colors.ink },
-  pinNote: { marginTop: 12, fontSize: 12, lineHeight: 18, color: colors.inkFaint },
-  pinBtn: {
-    marginTop: 16,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: colors.pine,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pinBtnText: { fontSize: 15, fontWeight: '600', color: '#FFFFFF' },
 });

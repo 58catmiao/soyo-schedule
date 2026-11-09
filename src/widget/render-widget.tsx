@@ -96,6 +96,10 @@ export function renderTodayWidget(data: AppData, now: Date, heightDp: number) {
 
   return (
     <FlexWidget
+      // 整张卡片点一下打开 soyo。原来根节点没有 clickAction，
+      // 用户点上去完全没反应（1.9.2 反馈最多的那条）。
+      clickAction="OPEN_APP"
+      accessibilityLabel="打开 soyo"
       style={{
         height: 'match_parent',
         width: 'match_parent',

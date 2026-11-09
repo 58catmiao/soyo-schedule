@@ -61,7 +61,24 @@ export interface Semester {
   periods: PeriodSlot[];
 }
 
+/**
+ * 一条待办。
+ *
+ * 只挂在某一个具体日期上（不跟周次走）：待办大多是「周三前交报告」这种一次性的事，
+ * 不是每周重复的课，所以用 'YYYY-MM-DD' 而不是 weekday + weeks。
+ */
+export interface Todo {
+  id: string;
+  title: string;
+  /** 哪一天，'YYYY-MM-DD' */
+  date: string;
+  done: boolean;
+  note?: string;
+}
+
 export interface AppData {
   semester: Semester;
   courses: Course[];
+  /** 旧存档没有这一项，读出来会补成空数组 */
+  todos?: Todo[];
 }
